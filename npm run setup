@@ -1,0 +1,12 @@
+
+### 5. Start the Application
+- Click the "Run" button or run `npm start` in the Replit shell
+
+## Local Development Setup
+
+### Prerequisites
+- Node.js 16+
+- PostgreSQL database
+- Slack workspace with admin permissions to create apps
+
+### Step 1: Clone the repository

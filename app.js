@@ -41,7 +41,8 @@ app.event('member_left_channel', eventHandlers.memberLeftChannel);
 // Start the app
 (async () => {
   try {
-    await db.connect();
+    // Initialize database and sync models
+    await db.sync();
     
     // Get a dynamic port for Replit or use the configured port
     const port = process.env.PORT || 3000;
@@ -63,12 +64,10 @@ app.event('member_left_channel', eventHandlers.memberLeftChannel);
   }
 })();
 
-// Required for Replit to keep the app running
-if (process.env.REPLIT_DB_URL) {
-  const http = require('http');
-  const server = http.createServer((req, res) => {
-    res.writeHead(200);
-    res.end('Slack matcher bot is running!');
-  });
-  server.listen(3001);
-}
+// Keep the app alive on Replit
+const http = require('http');
+const server = http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end('Slack matcher bot is running!');
+});
+server.listen(3001);

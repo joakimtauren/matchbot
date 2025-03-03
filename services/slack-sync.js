@@ -1,5 +1,6 @@
 const { models } = require('../db');
 const logger = require('../utils/logger');
+const { Op } = require('sequelize');
 
 /**
  * Synchronizes users from Slack channels
@@ -38,33 +39,41 @@ class SlackSyncService {
       const channelInfo = await client.conversations.info({ channel: channelId });
       
       // Get or create channel in our database
-      let channel = await models.Channel.findOne({ channelId });
-      
-      if (!channel) {
-        channel = new models.Channel({
-          channelId,
-          teamId: channelInfo.channel.team_id || '',
+      const { channel } = await models.Channel.findOrCreateByChannelId(
+        channelId,
+        channelInfo.channel.team_id || '',
+        {
           name: channelInfo.channel.name,
-          isPrivate: channelInfo.channel.is_private,
-        });
-      } else {
-        channel.name = channelInfo.channel.name;
-        channel.isPrivate = channelInfo.channel.is_private;
-      }
-
+          isPrivate: channelInfo.channel.is_private
+        }
+      );
+      
       // Get members of the channel
-      const members = await this.getChannelMembers(client, channelId);
-      channel.members = members;
-      channel.memberCount = members.length;
+      const memberIds = await this.getChannelMembers(client, channelId);
+      
+      // Set last synced time
       channel.lastSynced = new Date();
+      channel.memberCount = memberIds.length;
       await channel.save();
 
       // Sync each member's profile
-      for (const memberId of members) {
-        await this.syncUserProfile(client, memberId, channelId);
+      for (const memberId of memberIds) {
+        const user = await this.syncUserProfile(client, memberId, channelId);
+        if (user) {
+          // Add association to channel
+          await channel.addUser(user);
+        }
       }
 
-      logger.info(`Synced channel ${channelInfo.channel.name} with ${members.length} members`);
+      // Remove users who are no longer in the channel
+      const channelUsers = await channel.getUsers();
+      for (const user of channelUsers) {
+        if (!memberIds.includes(user.slackId)) {
+          await channel.removeUser(user);
+        }
+      }
+
+      logger.info(`Synced channel ${channelInfo.channel.name} with ${memberIds.length} members`);
     } catch (error) {
       logger.error(`Error syncing channel ${channelId}:`, error);
     }
@@ -103,42 +112,48 @@ class SlackSyncService {
    * @param {Object} client - Slack client instance
    * @param {String} userId - The user ID to sync
    * @param {String} channelId - The channel context
+   * @returns {Object} - The user model instance
    */
   async syncUserProfile(client, userId, channelId) {
     try {
       // Skip bot users
       const userInfo = await client.users.info({ user: userId });
       if (userInfo.user.is_bot) {
-        return;
+        return null;
       }
 
       // Get or create user in our database
-      let user = await models.User.findOne({ slackId: userId });
-      
-      if (!user) {
-        user = new models.User({
-          slackId: userId,
-          teamId: userInfo.user.team_id || '',
-          channels: [channelId],
-        });
-      } else if (!user.channels.includes(channelId)) {
-        user.channels.push(channelId);
+      const { user } = await models.User.findOrCreateBySlackId(
+        userId,
+        userInfo.user.team_id || '',
+        {
+          realName: userInfo.user.real_name || '',
+          displayName: userInfo.user.profile.display_name || '',
+          email: userInfo.user.profile.email || '',
+          profilePicture: userInfo.user.profile.image_192 || '',
+          role: userInfo.user.profile.title || '',
+          company: userInfo.user.profile.organization || userInfo.user.profile.company || ''
+        }
+      );
+
+      // Update user information if it already exists
+      if (user) {
+        user.realName = userInfo.user.real_name || user.realName;
+        user.displayName = userInfo.user.profile.display_name || user.displayName;
+        user.email = userInfo.user.profile.email || user.email;
+        user.profilePicture = userInfo.user.profile.image_192 || user.profilePicture;
+        user.role = userInfo.user.profile.title || user.role;
+        user.company = userInfo.user.profile.organization || 
+                      userInfo.user.profile.company || 
+                      user.company;
+        
+        await user.save();
       }
 
-      // Update user profile information
-      user.realName = userInfo.user.real_name || '';
-      user.displayName = userInfo.user.profile.display_name || '';
-      user.email = userInfo.user.profile.email || '';
-      user.profilePicture = userInfo.user.profile.image_192 || '';
-      
-      // Extract role and company from Slack profile
-      user.role = userInfo.user.profile.title || '';
-      user.company = userInfo.user.profile.organization || 
-                    userInfo.user.profile.company || '';
-
-      await user.save();
+      return user;
     } catch (error) {
       logger.error(`Error syncing user profile for ${userId}:`, error);
+      return null;
     }
   }
 
@@ -147,13 +162,13 @@ class SlackSyncService {
    */
   async handleUserJoinChannel(client, userId, channelId) {
     try {
-      await this.syncUserProfile(client, userId, channelId);
+      const user = await this.syncUserProfile(client, userId, channelId);
+      if (!user) return;
       
-      // Update channel members list
-      const channel = await models.Channel.findOne({ channelId });
-      if (channel && !channel.members.includes(userId)) {
-        channel.members.push(userId);
-        channel.memberCount = channel.members.length;
+      const { channel } = await models.Channel.findOrCreateByChannelId(channelId);
+      if (channel) {
+        await channel.addUser(user);
+        channel.memberCount = await channel.countUsers();
         await channel.save();
       }
     } catch (error) {
@@ -166,18 +181,13 @@ class SlackSyncService {
    */
   async handleUserLeaveChannel(userId, channelId) {
     try {
-      // Update user's channels list
-      const user = await models.User.findOne({ slackId: userId });
-      if (user) {
-        user.channels = user.channels.filter(id => id !== channelId);
-        await user.save();
-      }
+      const user = await models.User.findOne({ where: { slackId: userId } });
+      if (!user) return;
       
-      // Update channel members list
-      const channel = await models.Channel.findOne({ channelId });
+      const channel = await models.Channel.findOne({ where: { channelId } });
       if (channel) {
-        channel.members = channel.members.filter(id => id !== userId);
-        channel.memberCount = channel.members.length;
+        await channel.removeUser(user);
+        channel.memberCount = await channel.countUsers();
         await channel.save();
       }
     } catch (error) {

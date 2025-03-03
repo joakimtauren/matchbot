@@ -16,7 +16,7 @@ async function matchCommand({ command, ack, client, respond }) {
     const teamId = command.team_id;
 
     // Check if the user has opted out
-    const user = await models.User.findOne({ slackId: userId });
+    const user = await models.User.findOne({ where: { slackId: userId } });
     if (user && user.isOptedOut) {
       return await respond({
         text: "You've opted out of matching. Use `/opt-in` to start receiving matches again.",
@@ -72,11 +72,19 @@ async function optOutCommand({ command, ack, respond }) {
     
     const userId = command.user_id;
     
-    await models.User.findOneAndUpdate(
-      { slackId: userId },
+    const [updated] = await models.User.update(
       { isOptedOut: true },
-      { upsert: true }
+      { where: { slackId: userId } }
     );
+    
+    if (updated === 0) {
+      // User doesn't exist yet, create them
+      await models.User.create({
+        slackId: userId,
+        teamId: command.team_id,
+        isOptedOut: true
+      });
+    }
     
     await respond({
       text: "You've successfully opted out of matching. Use `/opt-in` if you want to opt back in later.",
@@ -101,11 +109,19 @@ async function optInCommand({ command, ack, respond }) {
     
     const userId = command.user_id;
     
-    await models.User.findOneAndUpdate(
-      { slackId: userId },
+    const [updated] = await models.User.update(
       { isOptedOut: false },
-      { upsert: true }
+      { where: { slackId: userId } }
     );
+    
+    if (updated === 0) {
+      // User doesn't exist yet, create them
+      await models.User.create({
+        slackId: userId,
+        teamId: command.team_id,
+        isOptedOut: false
+      });
+    }
     
     await respond({
       text: "You've successfully opted in to matching. Use `/match` to find new connections!",
@@ -184,7 +200,9 @@ async function openCalendar({ action, body, ack, client, respond }) {
     const channelId = body.channel.id;
     
     // Get the matched user's email
-    const matchedUser = await models.User.findOne({ slackId: matchedUserId });
+    const matchedUser = await models.User.findOne({ 
+      where: { slackId: matchedUserId }
+    });
     
     if (matchedUser && matchedUser.email) {
       // Update match interaction type

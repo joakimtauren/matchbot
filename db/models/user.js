@@ -1,49 +1,58 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
 
-const userSchema = new mongoose.Schema({
-  slackId: {
-    type: String,
-    required: true,
-    unique: true,
-  },
-  teamId: {
-    type: String,
-    required: true,
-  },
-  realName: String,
-  displayName: String,
-  email: String,
-  role: String,
-  company: String,
-  channels: [{
-    type: String, // Channel IDs
-  }],
-  isOptedOut: {
-    type: Boolean,
-    default: false,
-  },
-  lastMatched: {
-    type: Date,
-    default: null,
-  },
-  profilePicture: String,
-  previousMatches: [{
-    userId: String,
-    timestamp: Date,
-  }],
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
+module.exports = (sequelize) => {
+  const User = sequelize.define('User', {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true
+    },
+    slackId: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true
+    },
+    teamId: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    realName: {
+      type: DataTypes.STRING
+    },
+    displayName: {
+      type: DataTypes.STRING
+    },
+    email: {
+      type: DataTypes.STRING
+    },
+    role: {
+      type: DataTypes.STRING
+    },
+    company: {
+      type: DataTypes.STRING
+    },
+    isOptedOut: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
+    lastMatched: {
+      type: DataTypes.DATE,
+      defaultValue: null
+    },
+    profilePicture: {
+      type: DataTypes.STRING
+    }
+  });
 
-userSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
+  // Add a class method to find or create user by Slack ID
+  User.findOrCreateBySlackId = async function(slackId, teamId, data = {}) {
+    const [user, created] = await User.findOrCreate({
+      where: { slackId },
+      defaults: { teamId, ...data }
+    });
+    
+    return { user, created };
+  };
 
-module.exports = mongoose.model('User', userSchema);
+  return User;
+};

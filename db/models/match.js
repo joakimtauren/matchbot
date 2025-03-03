@@ -1,52 +1,57 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
 
-const matchSchema = new mongoose.Schema({
-  userId: {
-    type: String,
-    required: true,
-  },
-  matchedUserId: {
-    type: String,
-    required: true,
-  },
-  channelId: {
-    type: String,
-    required: true,
-  },
-  teamId: {
-    type: String,
-    required: true,
-  },
-  status: {
-    type: String,
-    enum: ['suggested', 'accepted', 'rejected', 'expired'],
-    default: 'suggested',
-  },
-  interactionType: {
-    type: String,
-    enum: ['direct_message', 'calendar', 'none'],
-    default: 'none',
-  },
-  similarityScore: {
-    type: Number,
-    default: 0,
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
+module.exports = (sequelize) => {
+  const Match = sequelize.define('Match', {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true
+    },
+    userId: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    matchedUserId: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    channelId: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    teamId: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    slackUserId: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    slackMatchedUserId: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    status: {
+      type: DataTypes.ENUM('suggested', 'accepted', 'rejected', 'expired'),
+      defaultValue: 'suggested'
+    },
+    interactionType: {
+      type: DataTypes.ENUM('direct_message', 'calendar', 'none'),
+      defaultValue: 'none'
+    },
+    similarityScore: {
+      type: DataTypes.FLOAT,
+      defaultValue: 0
+    }
+  }, {
+    indexes: [
+      // Create a unique index on userId, matchedUserId, and channelId
+      {
+        unique: true,
+        fields: ['userId', 'matchedUserId', 'channelId']
+      }
+    ]
+  });
 
-matchSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
-
-// Create a compound index to ensure we don't duplicate matches
-matchSchema.index({ userId: 1, matchedUserId: 1, channelId: 1 }, { unique: true });
-
-module.exports = mongoose.model('Match', matchSchema);
+  return Match;
+};

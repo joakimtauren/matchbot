@@ -1,6 +1,6 @@
-# Slack Matcher Bot
+# Slack Matcher Bot (PostgreSQL Version)
 
-A Slack WebSocket-based bot that matches users from within specific channels.
+A Slack WebSocket-based bot that matches users from within specific channels, designed to run on Replit with PostgreSQL.
 
 ## Features
 - Match users within specific Slack channels
@@ -14,11 +14,23 @@ A Slack WebSocket-based bot that matches users from within specific channels.
 - `/opt-out` - Stop receiving matches
 - `/opt-in` - Start receiving matches again
 
-## Local Development Setup
+## Replit Setup Instructions
 
-### Prerequisites
-- Node.js 16+
-- MongoDB (local installation or MongoDB Atlas account)
-- Slack workspace with admin permissions to create apps
+### 1. Create a new Replit project
+- Fork this repository or create a new Node.js project on Replit
+- Import all the files
 
-### Step 1: Clone the repository
+### 2. Set up PostgreSQL Database
+- In your Replit project, click on "Database" in the sidebar
+- Create a new PostgreSQL database
+- Your database connection URL will be automatically available
+
+### 3. Configure Environment Variables
+- In your Replit project, click on "Secrets" (lock icon) in the sidebar
+- Add the following secrets:
+  - `SLACK_BOT_TOKEN`: Your Slack bot token (starts with xoxb-)
+  - `SLACK_SIGNING_SECRET`: Your Slack app signing secret
+  - `SLACK_APP_TOKEN`: Your Slack app-level token (starts with xapp-)
+  - `NODE_ENV`: Set to "production"
+
+### 4. Run the Setup Script

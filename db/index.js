@@ -1,31 +1,47 @@
-const mongoose = require('mongoose');
+const { Sequelize } = require('sequelize');
 const logger = require('../utils/logger');
+const config = require('./config')[process.env.NODE_ENV || 'development'];
 
-const connect = async () => {
+// Initialize Sequelize with the database URL
+const sequelize = new Sequelize(config.url, {
+  dialect: 'postgres',
+  dialectOptions: config.dialectOptions,
+  logging: msg => logger.debug(msg)
+});
+
+// Import models
+const User = require('./models/user')(sequelize);
+const Channel = require('./models/channel')(sequelize);
+const Match = require('./models/match')(sequelize);
+
+// Setup model associations
+User.belongsToMany(Channel, { through: 'UserChannels' });
+Channel.belongsToMany(User, { through: 'UserChannels' });
+
+Match.belongsTo(User, { as: 'requester', foreignKey: 'userId' });
+Match.belongsTo(User, { as: 'matched', foreignKey: 'matchedUserId' });
+
+// Test database connection
+const sync = async () => {
   try {
-    // Set mongoose connection options suitable for Replit
-    const options = {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
-      autoIndex: true,
-      maxPoolSize: 10, // Maintain up to 10 socket connections
-      socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
-    };
+    await sequelize.authenticate();
+    logger.info('Connected to PostgreSQL database');
     
-    await mongoose.connect(process.env.MONGODB_URI, options);
-    logger.info('Connected to MongoDB');
+    // Sync all models
+    await sequelize.sync();
+    logger.info('Database models synchronized');
   } catch (error) {
-    logger.error('MongoDB connection error:', error);
-    process.exit(1);
+    logger.error('Database connection error:', error);
+    throw error;
   }
 };
 
 module.exports = {
-  connect,
+  sequelize,
+  sync,
   models: {
-    User: require('./models/user'),
-    Channel: require('./models/channel'),
-    Match: require('./models/match')
+    User,
+    Channel,
+    Match
   }
 };

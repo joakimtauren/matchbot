@@ -1,47 +1,56 @@
 const { models } = require('../db');
 const logger = require('../utils/logger');
+const { Op } = require('sequelize');
+const previousMatches = require('../db/previous-matches');
 
 class MatcherService {
   /**
    * Find potential matches for a user in a specific channel
-   * @param {String} userId - The user requesting matches
+   * @param {String} slackUserId - The user requesting matches
    * @param {String} channelId - The channel context
    * @returns {Array} - Array of potential matches with scores
    */
-  async findMatches(userId, channelId) {
+  async findMatches(slackUserId, channelId) {
     try {
       // Get the user
-      const user = await models.User.findOne({ slackId: userId });
+      const user = await models.User.findOne({ 
+        where: { slackId: slackUserId }
+      });
+      
       if (!user) {
-        throw new Error(`User ${userId} not found`);
+        throw new Error(`User ${slackUserId} not found`);
       }
 
       if (user.isOptedOut) {
-        throw new Error(`User ${userId} has opted out of matching`);
+        throw new Error(`User ${slackUserId} has opted out of matching`);
       }
 
-      // Get all users in the same channel who haven't opted out
-      const channel = await models.Channel.findOne({ channelId });
+      // Get the channel
+      const channel = await models.Channel.findOne({ 
+        where: { channelId }
+      });
+      
       if (!channel) {
         throw new Error(`Channel ${channelId} not found`);
       }
 
-      // Get eligible users in this channel
-      const eligibleUsers = await models.User.find({
-        slackId: { $ne: userId },
-        channels: channelId,
-        isOptedOut: false
+      // Get all users in this channel
+      const channelUsers = await channel.getUsers({
+        where: {
+          id: { [Op.ne]: user.id },
+          isOptedOut: false
+        }
       });
 
-      if (eligibleUsers.length === 0) {
+      if (channelUsers.length === 0) {
         return [];
       }
 
       // Get previous matches to avoid duplication
-      const previousMatches = user.previousMatches.map(match => match.userId);
+      const prevMatchedIds = await previousMatches.getPreviousMatches(slackUserId);
 
       // Score and rank potential matches
-      const scoredMatches = await this.scoreMatches(user, eligibleUsers, previousMatches);
+      const scoredMatches = await this.scoreMatches(user, channelUsers, prevMatchedIds);
       
       // Sort by score (descending) and take top 3
       return scoredMatches
@@ -49,7 +58,7 @@ class MatcherService {
         .slice(0, 3);
 
     } catch (error) {
-      logger.error(`Error finding matches for user ${userId}:`, error);
+      logger.error(`Error finding matches for user ${slackUserId}:`, error);
       throw error;
     }
   }
@@ -58,7 +67,7 @@ class MatcherService {
    * Score potential matches based on similarity and business rules
    * @param {Object} user - The user requesting matches
    * @param {Array} potentialMatches - Eligible users to match with
-   * @param {Array} previousMatches - IDs of previously matched users
+   * @param {Array} previousMatches - Slack IDs of previously matched users
    * @returns {Array} - Scored potential matches
    */
   async scoreMatches(user, potentialMatches, previousMatches) {
@@ -151,62 +160,48 @@ class MatcherService {
 
   /**
    * Record a match in the database
-   * @param {String} userId - The user requesting matches
-   * @param {String} matchedUserId - The matched user
+   * @param {String} slackUserId - The user requesting matches
+   * @param {String} slackMatchedUserId - The matched user
    * @param {String} channelId - The channel context
+   * @param {String} teamId - The team ID
    * @param {Number} similarityScore - The calculated similarity score
    */
-  async recordMatch(userId, matchedUserId, channelId, teamId, similarityScore) {
+  async recordMatch(slackUserId, slackMatchedUserId, channelId, teamId, similarityScore) {
     try {
-      // Create new match record
-      const match = new models.Match({
-        userId,
-        matchedUserId,
-        channelId,
-        teamId,
-        status: 'suggested',
-        similarityScore
-      });
+      const user = await models.User.findOne({ where: { slackId: slackUserId } });
+      const matchedUser = await models.User.findOne({ where: { slackId: slackMatchedUserId } });
       
-      await match.save();
-
-      // Update both users' previous matches array
-      await models.User.findOneAndUpdate(
-        { slackId: userId },
-        { 
-          $push: { previousMatches: { userId: matchedUserId, timestamp: new Date() } },
-          $set: { lastMatched: new Date() }
-        }
-      );
-
-      await models.User.findOneAndUpdate(
-        { slackId: matchedUserId },
-        { $push: { previousMatches: { userId, timestamp: new Date() } } }
-      );
-
+      if (user && matchedUser) {
+        await previousMatches.recordMatch(
+          user, 
+          matchedUser, 
+          channelId, 
+          teamId, 
+          similarityScore
+        );
+      }
     } catch (error) {
-      logger.error(`Error recording match between ${userId} and ${matchedUserId}:`, error);
+      logger.error(`Error recording match between ${slackUserId} and ${slackMatchedUserId}:`, error);
     }
   }
 
   /**
    * Update a match record when a user interacts with it
-   * @param {String} userId - The user who initiated the match
-   * @param {String} matchedUserId - The matched user
+   * @param {String} slackUserId - The user who initiated the match
+   * @param {String} slackMatchedUserId - The matched user
+   * @param {String} channelId - The channel context
    * @param {String} interactionType - The type of interaction
    */
-  async updateMatchInteraction(userId, matchedUserId, channelId, interactionType) {
+  async updateMatchInteraction(slackUserId, slackMatchedUserId, channelId, interactionType) {
     try {
-      await models.Match.findOneAndUpdate(
-        { userId, matchedUserId, channelId },
-        { 
-          interactionType,
-          status: 'accepted',
-          updatedAt: new Date()
-        }
+      await previousMatches.updateMatchInteraction(
+        slackUserId, 
+        slackMatchedUserId, 
+        channelId, 
+        interactionType
       );
     } catch (error) {
-      logger.error(`Error updating match interaction between ${userId} and ${matchedUserId}:`, error);
+      logger.error(`Error updating match interaction between ${slackUserId} and ${slackMatchedUserId}:`, error);
     }
   }
 }
