@@ -58,5 +58,8 @@ rl.question('Do you want to configure your app now? (yes/no): ', (answer) => {
 
 rl.on('close', () => {
   console.log('\nSetup complete! Your Slack Matcher Bot is ready to run on Replit.');
+  console.log('\n=== Next Steps ===');
+  console.log('1. Start the application by clicking the "Run" button or running "npm start"');
+  console.log('2. Configure your Slack app\'s Event Subscriptions and interactivity URLs');
   process.exit(0);
 });
