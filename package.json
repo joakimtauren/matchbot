@@ -1,0 +1,21 @@
+{
+  "name": "slack-matcher-bot",
+  "version": "1.0.0",
+  "description": "Slack bot for matching users within channels",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@slack/bolt": "^3.12.2",
+    "dotenv": "^16.0.3",
+    "mongoose": "^6.9.1",
+    "winston": "^3.8.2"
+  },
+  "devDependencies": {
+    "jest": "^29.4.3",
+    "nodemon": "^2.0.20"
+  }
+}
