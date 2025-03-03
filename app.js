@@ -40,16 +40,35 @@ app.event('member_left_channel', eventHandlers.memberLeftChannel);
 
 // Start the app
 (async () => {
-  await db.connect();
-  await app.start(process.env.PORT || 3000);
-  logger.info('⚡️ Bolt app is running!');
-  
-  // Initial sync of users from all channels the bot is in
   try {
-    const syncService = require('./services/slack-sync');
-    await syncService.initialSync(app.client);
-    logger.info('Initial user sync completed');
+    await db.connect();
+    
+    // Get a dynamic port for Replit or use the configured port
+    const port = process.env.PORT || 3000;
+    await app.start(port);
+    
+    logger.info(`⚡️ Bolt app is running on port ${port}!`);
+    
+    // Initial sync of users from all channels the bot is in
+    try {
+      const syncService = require('./services/slack-sync');
+      await syncService.initialSync(app.client);
+      logger.info('Initial user sync completed');
+    } catch (error) {
+      logger.error('Error during initial sync:', error);
+    }
   } catch (error) {
-    logger.error('Error during initial sync:', error);
+    logger.error('Error starting app:', error);
+    process.exit(1);
   }
 })();
+
+// Required for Replit to keep the app running
+if (process.env.REPLIT_DB_URL) {
+  const http = require('http');
+  const server = http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end('Slack matcher bot is running!');
+  });
+  server.listen(3001);
+}
