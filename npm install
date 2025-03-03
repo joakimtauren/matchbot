@@ -1,0 +1,20 @@
+
+### Step 3: Set up your Slack App
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app
+2. Under "Socket Mode", enable Socket Mode to connect using websockets
+3. Generate an app-level token with the `connections:write` scope
+4. Under "OAuth & Permissions":
+   - Add Bot Token Scopes: `channels:read`, `channels:history`, `groups:read`, `chat:write`, `users:read`, `users:read.email`, `im:write`
+   - Install the app to your workspace
+5. Enable Event Subscriptions and subscribe to events:
+   - `team_join`
+   - `user_profile_changed`
+   - `member_joined_channel`
+   - `member_left_channel`
+6. Add Slash Commands:
+   - `/match` - Find matches in the current channel
+   - `/opt-out` - Opt out of matching
+   - `/opt-in` - Opt in to matching
+
+### Step 4: Configure environment variables
+Create a `.env` file in the root directory using the `.env.example` as a template:

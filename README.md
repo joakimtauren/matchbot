@@ -2,24 +2,23 @@
 
 A Slack WebSocket-based bot that matches users from within specific channels.
 
-## Replit Setup Instructions
+## Features
+- Match users within specific Slack channels
+- Cross-company matching prioritized
+- Similar role matching
+- Opt-out functionality
+- Direct messaging and calendar scheduling options
 
-### 1. Create a new Replit project
-- Fork this repository or create a new Node.js project on Replit
-- Import all the files
+## Commands
+- `/match` - Find new matches in the current channel
+- `/opt-out` - Stop receiving matches
+- `/opt-in` - Start receiving matches again
 
-### 2. Set up MongoDB
-- Create a MongoDB Atlas account if you don't have one
-- Create a new cluster and database
-- Get your connection string
+## Local Development Setup
 
-### 3. Configure Environment Variables
-- In your Replit project, click on "Secrets" (lock icon) in the sidebar
-- Add the following secrets:
-  - `SLACK_BOT_TOKEN`: Your Slack bot token (starts with xoxb-)
-  - `SLACK_SIGNING_SECRET`: Your Slack app signing secret
-  - `SLACK_APP_TOKEN`: Your Slack app-level token (starts with xapp-)
-  - `MONGODB_URI`: Your MongoDB connection string
-  - `NODE_ENV`: Set to "production"
+### Prerequisites
+- Node.js 16+
+- MongoDB (local installation or MongoDB Atlas account)
+- Slack workspace with admin permissions to create apps
 
-### 4. Run the Setup Script (Optional)
+### Step 1: Clone the repository
